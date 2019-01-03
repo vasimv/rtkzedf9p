@@ -13,7 +13,7 @@ Just clone the repository and compile/install with "make all"/"make install".
 
 
 Usage
-
+```
 rtkzedf9p [-p] [-d] -b <BASE_RECEIVER_IP>:<BASE_RECEIVER_PORT> [ -r <ROVER_RECEIVER_IP>:<ROVER_RECEIVER_PORT> ] [ -l <LISTEN_PORT> ]
 
 -p - enables pass-through mode
@@ -21,5 +21,5 @@ rtkzedf9p [-p] [-d] -b <BASE_RECEIVER_IP>:<BASE_RECEIVER_PORT> [ -r <ROVER_RECEI
 -b - sets base receiver's IP and port (in form "192.168.1.182:3003")
 -r - sets rover receiver's IP and port (same)
 -l - sets listen port for output
-
+```
 
