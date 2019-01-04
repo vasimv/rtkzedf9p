@@ -284,7 +284,7 @@ int printRtk(int sock) {
       break;
   }
   // sdn/sde/adu/adne/sdeu/sdun is fake
-  snprintf(bufOut, sizeof(bufOut) - 1, "%04d/%02d/%02d %02d:%02d:%02d.%03d % 4.8f % 4.8f % 6.4f %d %d 0.0144 0.0154 0.0776 -0.0058 0.0082 -0.0199 0.00 % 3.3f\n",
+  snprintf(bufOut, sizeof(bufOut) - 1, "%04d/%02d/%02d %02d:%02d:%02d.%03d % 4.9f % 4.9f % 6.4f %d %d 0.0144 0.0154 0.0776 -0.0058 0.0082 -0.0199 0.00 % 3.3f\n",
     gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second(), gps.time.centisecond() * 10,
     gps.location.lat(), gps.location.lng(), gps.altitude.meters(), fixFlag, gps.satellites.value(), (fixFlag == 1) ? 999.900 : 1.500);
 
