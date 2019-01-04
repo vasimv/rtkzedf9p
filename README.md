@@ -23,3 +23,10 @@ rtkzedf9p [-p] [-d] -b <BASE_RECEIVER_IP>:<BASE_RECEIVER_PORT> [ -r <ROVER_RECEI
 -l - sets listen port for output
 ```
 
+Troubleshooting
+
+Enable debug output and run without -p, look at "quality" field (after altitude). It should switch to 4 (DGPS), 2 (FLOAT) or 1 (FIX) if you did set up everything correctly.
+
+If not, check receivers configuration by U-Center. Connect to receivers by TCP/IP and check "messages view". The base receiver must output all kind of RTCM3 messages. Verify that it has 1005 or 1007 type messages as they contain the base's coordinates, if not - check TMODE settings (must be in survey mode to determine them automatically or static with coordinates set in form of "184159999" for "18.4159999" for latitude/longitude and in cms for altitude).
+
+The rover receiver must accept RTCM3 input messages from the port you've connected it, and RTK mode enabled.
