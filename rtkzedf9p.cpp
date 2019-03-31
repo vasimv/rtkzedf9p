@@ -27,6 +27,8 @@
 char *roverReceiver = "127.0.0.1:3003";
 char *baseReceiver = "192.168.1.182:3003";
 int listenPort = 8988;
+int recvTimeout = 20000;
+int resetTimeout = 0;
 
 int sListen = -1;
 int sIncoming = -1;
@@ -38,6 +40,12 @@ int passthrough = 0;
 
 struct timeval lastBaseConnect;
 struct timeval lastRoverConnect;
+struct timeval lastBaseReceive;
+struct timeval lastRoverReceive;
+struct timeval lastReset;
+
+// U-Blox reset command
+unsigned char resetCommand[] = { 0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0xFF, 0xB9, 0x00, 0x00, 0xC6, 0x8B };
 
 int diffMillis(struct timeval tv) {
   struct timeval cTv, rTv;
@@ -334,6 +342,7 @@ void commPoll() {
     res = read(sZED, &c, 1);
     if (res > 0) {
       // printf("%c", c);
+      gettimeofday(&lastRoverReceive, NULL);
       if (!passthrough) {
         gps.encode(c);
         if (gps.location.isUpdated()) {
@@ -344,8 +353,16 @@ void commPoll() {
             sIncoming = -1;
           }
         }
-      } else
+      } else {
+        // check fix flag in watchdog mode
+        if (resetTimeout > 0) {
+          // Need tinyGPS to determine fix flag
+          gps.encode(c);
+          if (gps.location.isUpdated() && (gps.fixFlag == 4))
+            gettimeofday(&lastReset, NULL);
+        }
         send(sIncoming, &c, 1, MSG_NOSIGNAL);
+      }
     } else {
       closeSock(sZED);
       sZED = -1;
@@ -363,6 +380,7 @@ void commPoll() {
     // read RTCM
     res = recv(sRTCM, buf, sizeof(buf), MSG_NOSIGNAL);
     if (res > 0) {
+      gettimeofday(&lastBaseReceive, NULL);
       send(sZED, buf, res, MSG_NOSIGNAL);
     } else {
       closeSock(sRTCM);
@@ -391,7 +409,7 @@ void commPoll() {
     }
   }
 
-  if ((fds[1].revents & POLLNVAL) || (fds[1].revents & POLLERR) || (fds[1].revents & POLLHUP)) {
+  if ((diffMillis(lastBaseReceive) > (recvTimeout)) || (fds[1].revents & POLLNVAL) || (fds[1].revents & POLLERR) || (fds[1].revents & POLLHUP)) {
     closeSock(sRTCM);
     sRTCM = -1;
   }
@@ -400,6 +418,13 @@ void commPoll() {
     gettimeofday(&lastBaseConnect, NULL);
     sRTCM = createConn(baseReceiver, 1);
     flagBaseConnecting = 1;
+  }
+
+  if (diffMillis(lastRoverReceive) > (recvTimeout)) {
+    if (debug)
+      fprintf(stderr, "Rover receive timeout!\n");
+    closeSock(sZED);
+    sZED = -1;
   }
 
   if ((sZED < 0) && (diffMillis(lastRoverConnect) > 1000)) {
@@ -414,12 +439,19 @@ void commPoll() {
     sIncoming = -1;
     acceptConn();
   }
+
+  if ((resetTimeout > 0) && (sZED > 0) && (diffMillis(lastReset) > resetTimeout)) {
+    if (debug)
+      fprintf(stderr, "Too long time without fix, sending RESET!\n");
+    gettimeofday(&lastReset, NULL);
+    send(sZED, resetCommand, sizeof(resetCommand), MSG_NOSIGNAL);
+  }
 }
 
 int main(int argc, char **argv) {
   int c;
 
-  while ((c = getopt(argc, argv, "r:b:l:hdp")) != -1) {
+  while ((c = getopt(argc, argv, "r:b:l:t:R:hdp")) != -1) {
     switch (c) {
       case 'r':
         if (optarg)
@@ -428,6 +460,14 @@ int main(int argc, char **argv) {
       case 'b':
         if (optarg)
           baseReceiver = optarg;
+        break;
+      case 't':
+        if (optarg)
+          recvTimeout = std::atoi(optarg) * 1000;
+        break;
+      case 'R':
+        if (optarg)
+          resetTimeout = std::atoi(optarg) * 1000;
         break;
       case 'l':
         if (optarg)
@@ -441,10 +481,12 @@ int main(int argc, char **argv) {
         break;
       case 'h':
       default:
-        fprintf(stderr, "Usage: %s [-p] [-d] -b <BASE_RECEIVER_IP>:<BASE_RECEIVER_PORT> [ -r <ROVER_RECEIVER_IP>:<ROVER_RECEIVER_PORT> ] [ -l <LISTEN_PORT> ]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [-p] [-d] -b <BASE_RECEIVER_IP>:<BASE_RECEIVER_PORT> [ -r <ROVER_RECEIVER_IP>:<ROVER_RECEIVER_PORT> ] [ -l <LISTEN_PORT> ] [-t <RECEIVE_TIMEOUT> ] [-R <RESET_TIMEOUT> ]\n", argv[0]);
         fprintf(stderr, "-p - Pass-through mode, will output stuff from receiver directly, not in RTKLIB's format\n");
         fprintf(stderr, "-d - Debug output to stderr\n");
-        fprintf(stderr, "Defaults: %s -b %s -r %s -l %d\n\n", argv[0], baseReceiver, roverReceiver, listenPort);
+        fprintf(stderr, "-t <TIMEOUT> - Data receive timeout (for both receiver and base)\n");
+        fprintf(stderr, "-R <TIMEOUT> - Timeout to send RESET command to rover's receive if there is no RTK FIX (0 - disable)\n");
+        fprintf(stderr, "Defaults: %s -b %s -r %s -l %d -t %d -R %d\n\n", argv[0], baseReceiver, roverReceiver, listenPort, recvTimeout / 1000, resetTimeout / 1000);
         fprintf(stderr, "The base receiver must be configured to output RTCM3 messages and have set its coordinates (in TMODE configuration section)!\n");
         exit(0);
         break;
@@ -453,6 +495,9 @@ int main(int argc, char **argv) {
 
   gettimeofday(&lastBaseConnect, NULL);
   gettimeofday(&lastRoverConnect, NULL);
+  gettimeofday(&lastBaseReceive, NULL);
+  gettimeofday(&lastRoverReceive, NULL);
+  gettimeofday(&lastReset, NULL);
 
   sZED = createConn(roverReceiver, 0);
   openListen();
