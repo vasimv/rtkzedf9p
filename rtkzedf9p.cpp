@@ -355,14 +355,13 @@ void commPoll() {
         }
       } else {
         // check fix flag in watchdog mode
-        if (resetTimeout > 0) {
+        if (resetTimeout > 0) 
           // Need tinyGPS to determine fix flag
           gps.encode(c);
-          if (gps.location.isUpdated() && (gps.fixFlag == 4))
-            gettimeofday(&lastReset, NULL);
-        }
         send(sIncoming, &c, 1, MSG_NOSIGNAL);
       }
+      if ((resetTimeout > 0) && gps.location.isUpdated() && (gps.fixFlag == 4))
+        gettimeofday(&lastReset, NULL);
     } else {
       closeSock(sZED);
       sZED = -1;
