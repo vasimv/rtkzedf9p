@@ -397,6 +397,7 @@ void commPoll() {
     if (debug)
       fprintf(stderr, "Completing connection to base\n");
     
+    gettimeofday(&lastBaseReceive, NULL);
     res = getsockopt(sRTCM, SOL_SOCKET, SO_ERROR, &sockErr, &sockErrLen);
     if ((res >= 0) && (sockErr == 0)) {
       if (debug)
@@ -411,13 +412,14 @@ void commPoll() {
     }
   }
 
-  if ((diffMillis(lastBaseReceive) > (recvTimeout)) || (fds[1].revents & POLLNVAL) || (fds[1].revents & POLLERR) || (fds[1].revents & POLLHUP)) {
+  if (!flagBaseConnecting && ((diffMillis(lastBaseReceive) > (recvTimeout)) || (fds[1].revents & POLLNVAL) || (fds[1].revents & POLLERR) || (fds[1].revents & POLLHUP))) {
     closeSock(sRTCM);
     sRTCM = -1;
   }
 
   if ((sRTCM < 0) && (diffMillis(lastBaseConnect) > 2000)) {
     gettimeofday(&lastBaseConnect, NULL);
+    gettimeofday(&lastBaseReceive, NULL);
     sRTCM = createConn(baseReceiver, 1);
     flagBaseConnecting = 1;
   }
